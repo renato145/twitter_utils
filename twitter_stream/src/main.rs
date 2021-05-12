@@ -70,15 +70,20 @@ fn get_bearer_token(opts: &Opts) -> String {
 
 #[derive(Debug, Deserialize)]
 struct ListRulesResponse {
-    data: Vec<Rule>,
+    data: Option<Vec<Rule>>,
 }
 
 impl std::fmt::Display for ListRulesResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut out = format!("Found {} rules:", self.data.len());
-        self.data
-            .iter()
-            .for_each(|rule| out.push_str(format!("\n- {}", rule).as_str()));
+        let out = match self.data.as_ref() {
+            Some(data) => {
+                let mut out = format!("Found {} rules:", data.len());
+                data.iter()
+                    .for_each(|rule| out.push_str(format!("\n- {}", rule).as_str()));
+                out
+            }
+            None => "No rules".into(),
+        };
         write!(f, "{}", out)
     }
 }
@@ -198,7 +203,7 @@ async fn delete_rule(id: &str, bearer_token: &str) -> Result<()> {
     }
 }
 
-async fn delete_rules(ids: Vec<String>, bearer_token: &String) -> Result<()> {
+async fn delete_rules(ids: Vec<String>, bearer_token: &str) -> Result<usize> {
     let client = reqwest::Client::new();
     let res = client
         .post(RULES_URL)
@@ -219,7 +224,7 @@ async fn delete_rules(ids: Vec<String>, bearer_token: &String) -> Result<()> {
 
     let n = ids.len();
     match &res.meta.summary.get("deleted") {
-        Some(&i) if i == n => Ok(()),
+        Some(&i) if i == n => Ok(n),
         _ => Err(anyhow!("Couldn't delete all the rules: {:#?}", res)),
     }
 }
@@ -241,6 +246,7 @@ async fn main() -> Result<()> {
             println!("{}", rule);
         }
         Some(SubCmd::DeleteRule(delete_opts)) => {
+            // Delete all rules if --all
             if delete_opts.all {
                 if delete_opts.force
                     || Confirm::with_theme(&ColorfulTheme::default())
@@ -248,35 +254,40 @@ async fn main() -> Result<()> {
                         .interact()
                         .unwrap()
                 {
-                    let ids = get_rules(&bearer_token)
-                        .await?
-                        .data
-                        .into_iter()
-                        .map(|o| o.id)
-                        .collect::<Vec<_>>();
-
-                    match ids.len() {
-                        0 => println!("There are no rules in the stream"),
-                        n => {
-                            delete_rules(ids, &bearer_token).await?;
-                            println!("All rules deleted: {}", n);
+                    match get_rules(&bearer_token).await?.data {
+                        Some(ids) => {
+                            let ids = ids.into_iter().map(|o| o.id).collect::<Vec<_>>();
+                            let n = delete_rules(ids, &bearer_token).await?;
+                            println!("All rules deleted ({})", n);
+                        }
+                        None => {
+                            println!("There are no rules in the stream")
                         }
                     }
                 }
                 return Ok(());
             }
 
+            // Prompt select if no id was given
             let mut id = delete_opts.id;
-            if let None = id {
-                let rules = get_rules(&bearer_token).await?.data;
-                id = Select::with_theme(&ColorfulTheme::default())
-                    .with_prompt("Pick the rule to delete")
-                    .default(0)
-                    .items(&rules)
-                    .interact_opt()?
-                    .map(|i| rules[i].id.clone());
+            if id.is_none() {
+                match get_rules(&bearer_token).await?.data {
+                    Some(rules) => {
+                        id = Select::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Pick the rule to delete")
+                            .default(0)
+                            .items(&rules)
+                            .interact_opt()?
+                            .map(|i| rules[i].id.clone());
+                    }
+                    None => {
+                        println!("There are no rules in the stream")
+                    }
+                }
             }
 
+
+            // Delete 1 rule
             if let Some(id) = id {
                 delete_rule(&id, &bearer_token).await?;
                 println!("Rule {:?} deleted", id);
