@@ -5,6 +5,9 @@ use reqwest::header;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env};
 
+const RULES_URL: &str = "https://api.twitter.com/2/tweets/search/stream/rules";
+// const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
+
 /// Some app description
 #[derive(Clap, Debug)]
 #[clap(setting = AppSettings::ColoredHelp)]
@@ -53,8 +56,6 @@ struct DeleteRule {
     #[clap(short, long)]
     force: bool,
 }
-
-const RULES_URL: &str = "https://api.twitter.com/2/tweets/search/stream/rules";
 
 fn get_bearer_token(opts: &Opts) -> String {
     let bearer_token = match opts.bearer_token.clone() {
