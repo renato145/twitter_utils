@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{AppSettings, Clap};
+use dialoguer::{theme::ColorfulTheme, Confirm, Select};
 use reqwest::header;
 use serde::{Deserialize, Serialize};
-use std::env;
+use std::{collections::HashMap, env};
 
 /// Some app description
 #[derive(Clap, Debug)]
@@ -24,16 +25,33 @@ enum SubCmd {
     /// List current stream rules
     ListRules,
     CreateRule(CreateRule),
-    DeleteRule,
+    DeleteRule(DeleteRule),
 }
 
 /// Creates a rule on the current stream
-/// https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/integrate/build-a-rule
 #[derive(Clap, Debug, Serialize, Deserialize)]
+#[clap(
+    after_help = "See: https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/integrate/build-a-rule"
+)]
+#[clap(setting = AppSettings::ColoredHelp)]
 struct CreateRule {
     value: String,
     #[clap(short, long)]
     tag: Option<String>,
+}
+
+/// Delete a rule on the current stream
+#[derive(Clap, Debug, Serialize, Deserialize)]
+#[clap(
+    after_help = "See: https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/post-tweets-search-stream-rules#tab2"
+)]
+#[clap(setting = AppSettings::ColoredHelp)]
+struct DeleteRule {
+    id: Option<String>,
+    #[clap(short, long)]
+    all: bool,
+    #[clap(short, long)]
+    force: bool,
 }
 
 const RULES_URL: &str = "https://api.twitter.com/2/tweets/search/stream/rules";
@@ -52,7 +70,7 @@ fn get_bearer_token(opts: &Opts) -> String {
 
 #[derive(Debug, Deserialize)]
 struct ListRulesResponse {
-    data: Vec<RuleResponse>,
+    data: Vec<Rule>,
 }
 
 impl std::fmt::Display for ListRulesResponse {
@@ -66,13 +84,39 @@ impl std::fmt::Display for ListRulesResponse {
 }
 
 #[derive(Debug, Deserialize)]
-struct RuleResponse {
+struct CreateRuleResponse {
+    data: Option<Vec<Rule>>,
+    errors: Option<Vec<CreateRuleError>>,
+    meta: ResponseRuleMeta,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateRuleError {
+    value: String,
+    details: Vec<String>,
+    title: String,
+    #[serde(rename(deserialize = "type"))]
+    error_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DeleteRuleResponse {
+    meta: ResponseRuleMeta,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResponseRuleMeta {
+    summary: HashMap<String, usize>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct Rule {
     id: String,
     value: String,
     tag: Option<String>,
 }
 
-impl std::fmt::Display for RuleResponse {
+impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut out = format!("{}: {:?}", self.id, self.value);
         if let Some(tag) = &self.tag {
@@ -84,14 +128,100 @@ impl std::fmt::Display for RuleResponse {
 
 async fn get_rules(bearer_token: &str) -> Result<ListRulesResponse> {
     let client = reqwest::Client::new();
-    client
+    let res = client
         .get(RULES_URL)
         .header(header::AUTHORIZATION, bearer_token)
         .send()
         .await?
-        .json::<ListRulesResponse>()
-        .await
-        .context("Couldn't parse reponse")
+        .text()
+        .await?;
+
+    serde_json::from_str::<ListRulesResponse>(&res).with_context(|| {
+        format!(
+            "Couldn't parse response:\n{}",
+            serde_json::to_string_pretty(&res).unwrap_or(res)
+        )
+    })
+}
+
+async fn create_rule(rule: String, bearer_token: &str) -> Result<Rule> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(RULES_URL)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::AUTHORIZATION, bearer_token)
+        .body(format!("{{\"add\": [{}]}}", rule))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let res = serde_json::from_str::<CreateRuleResponse>(&res).with_context(|| {
+        format!(
+            "Couldn't parse response:\n{}",
+            serde_json::to_string_pretty(&res).unwrap_or(res)
+        )
+    })?;
+
+    if let Some(error) = res.errors {
+        return Err(anyhow!("Error creating rule: {:#?}", error));
+    }
+
+    match &res.meta.summary.get("created") {
+        Some(1) => Ok(res.data.unwrap()[0].clone()),
+        _ => Err(anyhow!("Couldn't create rule: {:#?}", res)),
+    }
+}
+
+async fn delete_rule(id: &str, bearer_token: &str) -> Result<()> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(RULES_URL)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::AUTHORIZATION, bearer_token)
+        .body(format!("{{\"delete\": {{ \"ids\": [ {:?} ] }} }}", id))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let res = serde_json::from_str::<DeleteRuleResponse>(&res).with_context(|| {
+        format!(
+            "Couldn't parse response:\n{}",
+            serde_json::to_string_pretty(&res).unwrap_or(res)
+        )
+    })?;
+
+    match &res.meta.summary.get("deleted") {
+        Some(1) => Ok(()),
+        _ => Err(anyhow!("Couldn't delete rule: {:#?}", res)),
+    }
+}
+
+async fn delete_rules(ids: Vec<String>, bearer_token: &String) -> Result<()> {
+    let client = reqwest::Client::new();
+    let res = client
+        .post(RULES_URL)
+        .header(header::CONTENT_TYPE, "application/json")
+        .header(header::AUTHORIZATION, bearer_token)
+        .body(format!("{{\"delete\": {{ \"ids\": {:?} }} }}", ids))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let res = serde_json::from_str::<DeleteRuleResponse>(&res).with_context(|| {
+        format!(
+            "Couldn't parse response:\n{}",
+            serde_json::to_string_pretty(&res).unwrap_or(res)
+        )
+    })?;
+
+    let n = ids.len();
+    match &res.meta.summary.get("deleted") {
+        Some(&i) if i == n => Ok(()),
+        _ => Err(anyhow!("Couldn't delete all the rules: {:#?}", res)),
+    }
 }
 
 #[tokio::main]
@@ -104,28 +234,58 @@ async fn main() -> Result<()> {
             let rules = get_rules(&bearer_token).await?;
             println!("{}", rules);
         }
-        Some(SubCmd::CreateRule(rule)) => {
-            let rule = serde_json::to_string(&rule).context("Couldn't serialize rule")?;
-            let client = reqwest::Client::new();
-            let result = client
-                .post(RULES_URL)
-                .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, bearer_token)
-                .body(format!("{{\"add\": [{}]}}", rule))
-                .send()
-                .await?
-                .text()
-                .await?;
-            println!("{}", result);
+        Some(SubCmd::CreateRule(create_opts)) => {
+            let rule_str =
+                serde_json::to_string(&create_opts).context("Couldn't serialize rule")?;
+            let rule = create_rule(rule_str, &bearer_token).await?;
+            println!("{}", rule);
         }
-        Some(SubCmd::DeleteRule) => {
-            println!("delete rule");
+        Some(SubCmd::DeleteRule(delete_opts)) => {
+            if delete_opts.all {
+                if delete_opts.force
+                    || Confirm::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Do you want to delete all rules?")
+                        .interact()
+                        .unwrap()
+                {
+                    let ids = get_rules(&bearer_token)
+                        .await?
+                        .data
+                        .into_iter()
+                        .map(|o| o.id)
+                        .collect::<Vec<_>>();
+
+                    match ids.len() {
+                        0 => println!("There are no rules in the stream"),
+                        n => {
+                            delete_rules(ids, &bearer_token).await?;
+                            println!("All rules deleted: {}", n);
+                        }
+                    }
+                }
+                return Ok(());
+            }
+
+            let mut id = delete_opts.id;
+            if let None = id {
+                let rules = get_rules(&bearer_token).await?.data;
+                id = Select::with_theme(&ColorfulTheme::default())
+                    .with_prompt("Pick the rule to delete")
+                    .default(0)
+                    .items(&rules)
+                    .interact_opt()?
+                    .map(|i| rules[i].id.clone());
+            }
+
+            if let Some(id) = id {
+                delete_rule(&id, &bearer_token).await?;
+                println!("Rule {:?} deleted", id);
+            }
         }
         None => {
             println!("main program here...");
         }
     }
 
-    // println!("{:#?}", opts);
     Ok(())
 }
