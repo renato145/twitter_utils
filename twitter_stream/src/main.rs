@@ -6,14 +6,17 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, env};
 
 const RULES_URL: &str = "https://api.twitter.com/2/tweets/search/stream/rules";
-// const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
+const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
 
 /// Some app description
 #[derive(Clap, Debug)]
+#[clap(
+    after_help = "See: https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream"
+)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
-    /// Token for twitter authentification, if not given it will look
-    /// for the environment variable BEARER_TOKEN.
+    /// Token for twitter authentification, if not given the program
+    /// will look for the environment variable BEARER_TOKEN.
     #[clap(short, long)]
     bearer_token: Option<String>,
     /// Enviroment file to look for $BEARER_TOKEN.
@@ -70,6 +73,90 @@ fn get_bearer_token(opts: &Opts) -> String {
 }
 
 #[derive(Debug, Deserialize)]
+struct StreamResponse {
+    data: StreamResponseData,
+    matching_rules: Option<Vec<RuleMatch>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RuleMatch {
+    id: usize,
+    tag: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamResponseData {
+    id: String,
+    text: String,
+    created_at: String,
+    conversation_id: String,
+    public_metrics: PublicMetrics,
+    entities: Entities,
+}
+
+#[derive(Debug, Deserialize)]
+struct PublicMetrics {
+    retweet_count: usize,
+    reply_count: usize,
+    like_count: usize,
+    quote_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct Entities {
+    annotations: Option<Vec<EntityAnnotation>>,
+    urls: Option<Vec<EntityUrl>>,
+    hashtags: Option<Vec<EntityTag>>,
+    mentions: Option<Vec<EntityMention>>,
+    cashtags: Option<Vec<EntityTag>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EntityAnnotation {
+    start: usize,
+    end: usize,
+    probability: f32,
+    #[serde(rename(deserialize = "type"))]
+    annotation_type: String,
+    normalized_text: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EntityUrl {
+    start: usize,
+    end: usize,
+    url: String,
+    expanded_url: String,
+    display_url: String,
+    unwound_url: Option<String>,
+    images: Option<Vec<UrlImage>>,
+    status: Option<usize>,
+    title: Option<String>,
+    description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UrlImage {
+    url: String,
+    width: usize,
+    height: usize,
+}
+
+#[derive(Debug, Deserialize)]
+struct EntityTag {
+    start: usize,
+    end: usize,
+    tag: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EntityMention {
+    start: usize,
+    end: usize,
+    username: String,
+}
+
+#[derive(Debug, Deserialize)]
 struct ListRulesResponse {
     data: Option<Vec<Rule>>,
 }
@@ -118,13 +205,14 @@ struct ResponseRuleMeta {
 #[derive(Debug, Deserialize, Clone)]
 struct Rule {
     id: String,
-    value: String,
+    value: Option<String>,
     tag: Option<String>,
 }
 
 impl std::fmt::Display for Rule {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut out = format!("{}: {:?}", self.id, self.value);
+        let value = self.value.as_ref().map(|o| o.as_str()).unwrap_or("");
+        let mut out = format!("{}: {:?}", self.id, value);
         if let Some(tag) = &self.tag {
             out.push_str(&format!(" [tag: {:?}]", tag))
         }
@@ -230,6 +318,27 @@ async fn delete_rules(ids: Vec<String>, bearer_token: &str) -> Result<usize> {
     }
 }
 
+async fn stream_data(bearer_token: &str) -> Result<()> {
+    let client = reqwest::Client::new();
+    let mut res = client
+        .get(STREAM_URL)
+        .header(header::AUTHORIZATION, bearer_token)
+        .query(&[(
+            "tweet.fields",
+            "created_at,conversation_id,public_metrics,entities",
+        )])
+        .send()
+        .await?;
+
+    while let Some(chunk) = res.chunk().await? {
+        match serde_json::from_slice::<StreamResponse>(&chunk) {
+            Ok(data) => println!("{:#?}", data),
+            Err(e) => eprintln!("Couldn't parse tweet data:\n{}\n{:?}", e, chunk),
+        }
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
@@ -287,7 +396,6 @@ async fn main() -> Result<()> {
                 }
             }
 
-
             // Delete 1 rule
             if let Some(id) = id {
                 delete_rule(&id, &bearer_token).await?;
@@ -295,6 +403,7 @@ async fn main() -> Result<()> {
             }
         }
         None => {
+            stream_data(&bearer_token).await?;
             println!("main program here...");
         }
     }
