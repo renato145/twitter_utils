@@ -79,7 +79,7 @@ pub struct StreamResponseData {
     #[serde(default)]
     pub referenced_tweets: Option<Vec<ReferencedTweets>>,
     pub public_metrics: PublicMetrics,
-    pub entities: Entities,
+    pub entities: Option<Entities>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
