@@ -28,7 +28,7 @@ pub async fn stream_data(out_file: &str, bearer_token: &str) -> Result<()> {
         match serde_json::from_slice::<StreamResponse>(&chunk) {
             Ok(data) => {
                 jsonl::write(&mut file, &data)?;
-                file.flush()?;
+                // TODO : show some information about the number of tweets processed
             }
             Err(e) => eprintln!("Couldn't parse tweet data:\n{}\n{:?}", e, chunk),
         }
