@@ -1,15 +1,15 @@
-files = twitter_stream explore_tweets
+fname = twitter_stream
 target_dir = target/release
 
 .PHONY: all build move
 
-all: build move
+all: build clean move
 
 build:
 	cargo build --release
 
-move:
-	for file in ${files}; do mv ${target_dir}/$$file .; done
-
 clean:
-	for file in ${files}; do rm $$file; done
+	rm ${fname}
+
+move:
+	mv ${target_dir}/${fname} .
