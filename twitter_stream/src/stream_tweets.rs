@@ -72,7 +72,6 @@ pub struct StreamResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StreamResponseData {
-    /// To retrieve the url use https://twitter.com/i/web/status/{id}
     pub id: String,
     pub text: String,
     pub created_at: String,

@@ -19,3 +19,8 @@ pub fn get_bearer_token(opts: &Opts) -> String {
     };
     format!("Bearer {}", bearer_token)
 }
+
+/// Gets the url using the tweet id: https://twitter.com/i/web/status/{id}
+pub fn tweetid2url<T: ToString>(id: T) -> String {
+    format!("https://twitter.com/i/web/status/{}", id.to_string())
+}

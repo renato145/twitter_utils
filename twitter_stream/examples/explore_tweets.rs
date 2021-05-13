@@ -1,7 +1,7 @@
 use anyhow::Result;
 use console::Style;
 use std::{fs::File, io::BufReader};
-use twitter_stream::stream_tweets::StreamResponse;
+use twitter_stream::{stream_tweets::StreamResponse, tweetid2url};
 
 fn main() -> Result<()> {
     let file = File::open("twitter_data.jsonl")?;
@@ -20,13 +20,16 @@ fn main() -> Result<()> {
         }
     }
 
+    let n = 5;
     let bold = Style::new().bold();
-    let msg = format!("{} tweets found:", data.len());
-    println!("{}", bold.apply_to(msg));
+    let msg = format!("{} tweets found", data.len());
+    println!("{} (showing {} last tweets):", bold.apply_to(msg), n);
+    let blue = bold.blue();
 
-    data.iter()
-        .take(5)
-        .for_each(|o| println!("- {}", o.data.text));
+    data.iter().rev().take(n).for_each(|o| {
+        let url = tweetid2url(&o.data.id);
+        println!("- {}: \"{}\"", blue.apply_to(url), o.data.text);
+    });
 
     Ok(())
 }
