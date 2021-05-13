@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
     let bearer_token = get_bearer_token(&opts);
 
     match opts.subcmd {
-        None => stream_data(&bearer_token).await?,
+        None => stream_data(&opts.file, &bearer_token).await?,
         Some(SubCmd::ListRules) => {
             let rules = get_rules(&bearer_token).await?;
             println!("{}", rules);

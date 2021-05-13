@@ -1,13 +1,15 @@
 use clap::{AppSettings, Clap};
 use serde::{Deserialize, Serialize};
 
-/// Some app description
 #[derive(Clap, Debug)]
 #[clap(
     after_help = "See: https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/api-reference/get-tweets-search-stream"
 )]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct Opts {
+    /// File to store data
+    #[clap(short, long, default_value = "twitter_data.jsonl")]
+    pub file: String,
     /// Token for twitter authentification, if not given the program
     /// will look for the environment variable BEARER_TOKEN.
     #[clap(short, long)]
