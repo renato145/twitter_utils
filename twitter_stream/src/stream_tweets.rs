@@ -1,19 +1,19 @@
-use std::{fs::OpenOptions, io::Write};
-
 use anyhow::Result;
+use console::{Style, Term};
 use reqwest::header;
 use serde::{Deserialize, Serialize};
+use std::fs::OpenOptions;
 
 pub const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
 
-pub async fn stream_data(out_file: &str, bearer_token: &str) -> Result<()> {
+pub async fn stream_data(out_file: &str, limit: Option<usize>, bearer_token: &str) -> Result<()> {
     let client = reqwest::Client::new();
     let mut res = client
         .get(STREAM_URL)
         .header(header::AUTHORIZATION, bearer_token)
         .query(&[(
             "tweet.fields",
-            "created_at,conversation_id,public_metrics,entities",
+            "created_at,conversation_id,referenced_tweets,public_metrics,entities",
         )])
         .send()
         .await?;
@@ -24,13 +24,41 @@ pub async fn stream_data(out_file: &str, bearer_token: &str) -> Result<()> {
         .append(true)
         .open(out_file)?;
 
+    let term = Term::stdout();
+    let bold = Style::new().bold();
+    println!("{}\n\n", bold.apply_to("Starting the stream..."));
+    let mut processed = 0usize;
+    let mut errors = 0usize;
+    let mut finish = false;
+    let green = Style::new().green();
+    let red = Style::new().red();
+
     while let Some(chunk) = res.chunk().await? {
+        if chunk.len() < 10 {
+            continue;
+        }
         match serde_json::from_slice::<StreamResponse>(&chunk) {
             Ok(data) => {
                 jsonl::write(&mut file, &data)?;
-                // TODO : show some information about the number of tweets processed
+                processed += 1;
             }
-            Err(e) => eprintln!("Couldn't parse tweet data:\n{}\n{:?}", e, chunk),
+            Err(e) => {
+                eprintln!("Couldn't parse tweet data:\n{}\n{:?}", e, chunk);
+                errors += 1;
+            }
+        }
+        let mut progress = format!("{}", processed);
+        if let Some(limit) = limit {
+            progress.push_str(&format!("/{}", limit));
+            if processed == limit {
+                finish = true;
+            }
+        }
+        term.clear_last_lines(2)?;
+        println!("{} {}", green.apply_to("Processed tweets  :"), progress);
+        println!("{} {}", red.apply_to("Errors encountered:"), errors);
+        if finish {
+            break;
         }
     }
     Ok(())
@@ -43,20 +71,29 @@ pub struct StreamResponse {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RuleMatch {
-    pub id: usize,
-    pub tag: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 pub struct StreamResponseData {
     /// To retrieve the url use https://twitter.com/i/web/status/{id}
     pub id: String,
     pub text: String,
     pub created_at: String,
     pub conversation_id: String,
+    #[serde(default)]
+    pub referenced_tweets: Option<Vec<ReferencedTweets>>,
     pub public_metrics: PublicMetrics,
     pub entities: Entities,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RuleMatch {
+    pub id: usize,
+    pub tag: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReferencedTweets {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub reference_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -81,7 +118,7 @@ pub struct EntityAnnotation {
     pub start: usize,
     pub end: usize,
     pub probability: f32,
-    #[serde(rename(deserialize = "type"))]
+    #[serde(rename = "type")]
     pub annotation_type: String,
     pub normalized_text: String,
 }

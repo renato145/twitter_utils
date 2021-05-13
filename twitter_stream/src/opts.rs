@@ -7,6 +7,9 @@ use serde::{Deserialize, Serialize};
 )]
 #[clap(setting = AppSettings::ColoredHelp)]
 pub struct Opts {
+    /// Limits the number of tweets to process
+    #[clap(short, long)]
+    pub limit: Option<usize>,
     /// File to store data
     #[clap(short, long, default_value = "twitter_data.jsonl")]
     pub file: String,

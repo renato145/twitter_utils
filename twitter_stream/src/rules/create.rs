@@ -1,4 +1,4 @@
-use super::{RULES_URL, ResponseRuleMeta, Rule};
+use super::{ResponseRuleMeta, Rule, RULES_URL};
 use anyhow::{anyhow, Context, Result};
 use reqwest::header;
 use serde::Deserialize;
@@ -44,6 +44,6 @@ pub struct CreateRuleError {
     pub value: String,
     pub details: Vec<String>,
     pub title: String,
-    #[serde(rename(deserialize = "type"))]
+    #[serde(rename = "type")]
     pub error_type: String,
 }
