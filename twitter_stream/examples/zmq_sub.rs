@@ -14,6 +14,7 @@ fn main() -> Result<()> {
     let blue = Style::new().blue();
     println!("{}", bold.apply_to("Server started"));
     println!("{}", bold.apply_to("Start receiving data..."));
+
     loop {
         let _envelop = subscriber.recv_msg(0)?;
         let msg = subscriber.recv_bytes(0)?; //.unwrap();
