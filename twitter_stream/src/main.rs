@@ -14,7 +14,7 @@ pub async fn append2file() {}
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
-    let bearer_token = get_bearer_token(&opts);
+    let bearer_token = get_bearer_token(opts.bearer_token.as_deref(), Some(opts.env_file.as_str()))?;
 
     match opts.subcmd {
         // Do the Streaming
