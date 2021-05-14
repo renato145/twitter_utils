@@ -20,6 +20,15 @@ pub async fn stream_data(
         .send()
         .await?;
 
+    // TODO: maybe take care of rate limits
+    // "x-rate-limit-limit": "50",
+    // "x-rate-limit-reset": "1621007751",
+    // "x-rate-limit-remaining": "26",
+    // let headers = res.headers();
+    // let rate_limit = headers.get("x-rate-limit-limit");
+    // let rate_limit_reset = headers.get("x-rate-limit-reset");
+    // let rate_limit_remaining = headers.get("x-rate-limit-remaining");
+
     let stream = res
         .bytes_stream()
         .into_stream()
