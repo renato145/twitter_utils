@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use console::{Style, Term};
 use reqwest::header;
 use serde::{Deserialize, Serialize};
@@ -33,7 +33,7 @@ pub async fn stream_data(out_file: &str, limit: Option<usize>, bearer_token: &st
     let green = Style::new().green();
     let red = Style::new().red();
 
-    while let Some(chunk) = res.chunk().await? {
+    while let Some(chunk) = res.chunk().await.context("Error reading chunk")? {
         if chunk.len() < 10 {
             continue;
         }
