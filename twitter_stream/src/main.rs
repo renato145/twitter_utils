@@ -14,7 +14,8 @@ pub async fn append2file() {}
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
-    let bearer_token = get_bearer_token(opts.bearer_token.as_deref(), Some(opts.env_file.as_str()))?;
+    let bearer_token =
+        get_bearer_token(opts.bearer_token.as_deref(), Some(opts.env_file.as_str()))?;
 
     match opts.subcmd {
         // Do the Streaming
@@ -35,7 +36,8 @@ async fn main() -> Result<()> {
             let green = Style::new().green();
             let red = Style::new().red();
 
-            while let Some(chunk) = stream_data(&bearer_token).await?.next().await {
+            let mut stream = stream_data(&bearer_token).await?;
+            while let Some(chunk) = stream.next().await {
                 match chunk {
                     Ok(tweet_data) => {
                         jsonl::write(&mut file, &tweet_data)?;
