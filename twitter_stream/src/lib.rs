@@ -9,7 +9,7 @@ pub use stream_tweets::{stream_data, StreamError, StreamResponse, STREAM_URL};
 use anyhow::{Context, Result};
 
 pub fn get_bearer_token(bearer_token: Option<&str>, env_file: Option<&str>) -> Result<String> {
-    let bearer_token = match bearer_token.clone() {
+    let bearer_token = match bearer_token {
         Some(token) => token.to_string(),
         None => {
             if let Some(env_file) = env_file {
