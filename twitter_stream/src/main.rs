@@ -1,9 +1,15 @@
 use anyhow::{Context, Result};
 use clap::Clap;
+use console::{Style, Term};
 use dialoguer::{theme::ColorfulTheme, Confirm, Select};
+use futures::StreamExt;
+use std::{fs::OpenOptions, time::Instant};
 use twitter_stream::{
-    create_rule, delete_rule, delete_rules, get_bearer_token, get_rules, stream_data, Opts, SubCmd,
+    create_rule, delete_rule, delete_rules, get_bearer_token, get_rules, stream_data, Opts,
+    StreamError, SubCmd,
 };
+
+pub async fn append2file() {}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -11,9 +17,61 @@ async fn main() -> Result<()> {
     let bearer_token = get_bearer_token(&opts);
 
     match opts.subcmd {
+        // Do the Streaming
         None => {
-            stream_data(&opts.file, opts.limit, &bearer_token).await?;
-            println!("Done :)");
+            let now = Instant::now();
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(&opts.file)?;
+
+            let term = Term::stdout();
+            let bold = Style::new().bold();
+            println!("{}\n\n", bold.apply_to("Starting the stream..."));
+            let mut processed = 0usize;
+            let mut errors = 0usize;
+            let mut finish = false;
+            let green = Style::new().green();
+            let red = Style::new().red();
+
+            while let Some(chunk) = stream_data(&bearer_token).await?.next().await {
+                match chunk {
+                    Ok(tweet_data) => {
+                        jsonl::write(&mut file, &tweet_data)?;
+                        processed += 1;
+
+                        let mut progress = format!("{}", processed);
+                        if let Some(limit) = opts.limit {
+                            progress.push_str(&format!("/{}", limit));
+                            if processed == limit {
+                                finish = true;
+                            }
+                        }
+
+                        term.clear_last_lines(2)?;
+                        println!("{} {}", green.apply_to("Processed tweets  :"), progress);
+                        println!("{} {}", red.apply_to("Errors encountered:"), errors);
+                        if finish {
+                            break;
+                        }
+                    }
+                    Err(StreamError::SmallChunk) => {}
+                    Err(StreamError::Parse(err)) => {
+                        eprintln!(
+                            "Couldn't parse tweet data:\n{}\n{:?}\n\n",
+                            err.source, err.msg
+                        );
+                        errors += 1;
+                    }
+                    Err(StreamError::Reqwest(err)) => {
+                        eprintln!("Error reading chunk of data: {}\n\n", err);
+                        errors += 1;
+                    }
+                }
+            }
+
+            println!("Done :)\n{:?}", now.elapsed());
         }
         Some(SubCmd::ListRules) => {
             let rules = get_rules(&bearer_token).await?;

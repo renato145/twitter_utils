@@ -1,14 +1,16 @@
-use anyhow::{Context, Result};
-use console::{Style, Term};
+use anyhow::Result;
+use futures::{stream::IntoStream, Stream, StreamExt, TryStreamExt};
 use reqwest::header;
 use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
+use thiserror::Error;
 
 pub const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
 
-pub async fn stream_data(out_file: &str, limit: Option<usize>, bearer_token: &str) -> Result<()> {
+pub async fn stream_data(
+    bearer_token: &str,
+) -> Result<IntoStream<impl Stream<Item = std::result::Result<StreamResponse, StreamError>>>> {
     let client = reqwest::Client::new();
-    let mut res = client
+    let res = client
         .get(STREAM_URL)
         .header(header::AUTHORIZATION, bearer_token)
         .query(&[(
@@ -18,50 +20,43 @@ pub async fn stream_data(out_file: &str, limit: Option<usize>, bearer_token: &st
         .send()
         .await?;
 
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .append(true)
-        .open(out_file)?;
+    let stream = res
+        .bytes_stream()
+        .into_stream()
+        .map(|chunk| match chunk {
+            Ok(chunk) => {
+                if chunk.len() < 10 {
+                    Err(StreamError::SmallChunk)
+                } else {
+                    serde_json::from_slice::<StreamResponse>(&chunk).map_err(|err| {
+                        StreamError::Parse(ParseError {
+                            msg: format!("{:?}", chunk),
+                            source: err,
+                        })
+                    })
+                }
+            }
+            Err(err) => Err(err.into()),
+        })
+        .into_stream();
+    Ok(stream)
+}
 
-    let term = Term::stdout();
-    let bold = Style::new().bold();
-    println!("{}\n\n", bold.apply_to("Starting the stream..."));
-    let mut processed = 0usize;
-    let mut errors = 0usize;
-    let mut finish = false;
-    let green = Style::new().green();
-    let red = Style::new().red();
+#[derive(Error, Debug)]
+pub enum StreamError {
+    #[error("The readed chunk is too small to parse")]
+    SmallChunk,
+    #[error("Error reading chunk of stream")]
+    Reqwest(#[from] reqwest::Error),
+    #[error("{0}")]
+    Parse(ParseError),
+}
 
-    while let Some(chunk) = res.chunk().await.context("Error reading chunk")? {
-        if chunk.len() < 10 {
-            continue;
-        }
-        match serde_json::from_slice::<StreamResponse>(&chunk) {
-            Ok(data) => {
-                jsonl::write(&mut file, &data)?;
-                processed += 1;
-            }
-            Err(e) => {
-                eprintln!("Couldn't parse tweet data:\n{}\n{:?}", e, chunk);
-                errors += 1;
-            }
-        }
-        let mut progress = format!("{}", processed);
-        if let Some(limit) = limit {
-            progress.push_str(&format!("/{}", limit));
-            if processed == limit {
-                finish = true;
-            }
-        }
-        term.clear_last_lines(2)?;
-        println!("{} {}", green.apply_to("Processed tweets  :"), progress);
-        println!("{} {}", red.apply_to("Errors encountered:"), errors);
-        if finish {
-            break;
-        }
-    }
-    Ok(())
+#[derive(Error, Debug)]
+#[error("Error parsing tweet data:\n{source}\n{msg}")]
+pub struct ParseError {
+    pub msg: String,
+    pub source: serde_json::Error,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

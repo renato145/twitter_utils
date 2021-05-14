@@ -4,7 +4,7 @@ pub mod stream_tweets;
 
 pub use opts::{Opts, SubCmd};
 pub use rules::{create_rule, delete_rule, delete_rules, get_rules, RULES_URL};
-pub use stream_tweets::{stream_data, STREAM_URL};
+pub use stream_tweets::{stream_data, STREAM_URL, StreamResponse, StreamError};
 
 use std::env;
 
