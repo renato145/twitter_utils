@@ -19,3 +19,6 @@ jsonl = "4.0.1"
 console = "0.14.1"
 futures = "0.3.15"
 thiserror = "1.0.24"
+
+[dev-dependencies]
+zmq = "0.9.2"
