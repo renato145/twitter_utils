@@ -79,13 +79,13 @@ impl RateLimitHeaders {
         })
     }
 
-    /// If necessary waits for a rate limit refresh
-    pub async fn wait(&self) {
+    // Get time until rate limit reset
+    pub fn duration_until_reset(&self) -> Option<Duration> {
         let now = SystemTime::now().duration_since(UNIX_EPOCH);
         if let (Some(0), Some(reset), Ok(now)) = (self.remaining, self.reset, now) {
-            if let Some(rest) = reset.checked_sub(now) {
-                tokio::time::sleep(rest).await;
-            }
+            reset.checked_sub(now)
+        } else {
+            None
         }
     }
 }

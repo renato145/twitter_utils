@@ -69,8 +69,13 @@ async fn main() -> Result<()> {
                     Err(StreamError::Reqwest(err)) => {
                         eprintln!("Error reading chunk of data: {:#?}", err);
                         errors += 1;
-                        println!("Waiting for rate limit ({:?})...\n\n", rate_limit.reset);
-                        rate_limit.wait().await;
+
+                        if let Some(rest) = rate_limit.duration_until_reset() {
+                            println!("Waiting for rate limit ({:?})...\n\n", rest);
+                            tokio::time::sleep(rest).await;
+                        }
+
+                        println!("Resetting connection...");
                         let (rl, s) = stream_data(&bearer_token).await?;
                         rate_limit = rl;
                         stream = s;
