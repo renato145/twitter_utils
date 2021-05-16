@@ -1,6 +1,8 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use futures::{stream::IntoStream, Stream, StreamExt, TryStreamExt};
-use reqwest::header;
+use reqwest::header::{self, HeaderMap};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -8,7 +10,10 @@ pub const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
 
 pub async fn stream_data(
     bearer_token: &str,
-) -> Result<IntoStream<impl Stream<Item = std::result::Result<StreamResponse, StreamError>>>> {
+) -> Result<(
+    RateLimitHeaders,
+    IntoStream<impl Stream<Item = std::result::Result<StreamResponse, StreamError>>>,
+)> {
     let client = reqwest::Client::new();
     let res = client
         .get(STREAM_URL)
@@ -20,14 +25,7 @@ pub async fn stream_data(
         .send()
         .await?;
 
-    // TODO: maybe take care of rate limits
-    // "x-rate-limit-limit": "50",
-    // "x-rate-limit-reset": "1621007751",
-    // "x-rate-limit-remaining": "26",
-    // let headers = res.headers();
-    // let rate_limit = headers.get("x-rate-limit-limit");
-    // let rate_limit_reset = headers.get("x-rate-limit-reset");
-    // let rate_limit_remaining = headers.get("x-rate-limit-remaining");
+    let rate_limit = RateLimitHeaders::from_headers(res.headers())?;
 
     let stream = res
         .bytes_stream()
@@ -48,7 +46,42 @@ pub async fn stream_data(
             Err(err) => Err(err.into()),
         })
         .into_stream();
-    Ok(stream)
+    Ok((rate_limit, stream))
+}
+
+// "x-rate-limit-limit": "50",
+// "x-rate-limit-reset": "1621007751",
+// "x-rate-limit-remaining": "26",
+#[derive(Debug)]
+pub struct RateLimitHeaders {
+    pub limit: Option<usize>,
+    pub reset: Option<Duration>,
+    pub remaining: Option<usize>,
+}
+
+impl RateLimitHeaders {
+    pub fn from_headers(header_map: &HeaderMap) -> Result<Self> {
+        let limit = match header_map.get("x-rate-limit-limit") {
+            Some(o) => Some(o.to_str()?.parse()?),
+            None => None,
+        };
+        let reset = match header_map.get("x-rate-limit-reset") {
+            Some(o) => {
+                let reset = o.to_str()?.parse()?;
+                Some(Duration::from_secs(reset))
+            }
+            None => None,
+        };
+        let remaining = match header_map.get("x-rate-limit-remaining") {
+            Some(o) => Some(o.to_str()?.parse()?),
+            None => None,
+        };
+        Ok(RateLimitHeaders {
+            limit,
+            reset,
+            remaining,
+        })
+    }
 }
 
 #[derive(Error, Debug)]

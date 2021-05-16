@@ -15,12 +15,14 @@ async fn main() -> Result<()> {
 
     let bold = Style::new().bold();
     println!("{}", bold.apply_to("Server started"));
+    let (_rate_limit, mut stream) = stream_data(&bearer_token).await?;
     println!("{}", bold.apply_to("Start streaming data..."));
 
     let mut i = 0;
     let term = Term::stdout();
     println!("Sended messages: {}", i);
-    while let Some(Ok(chunk)) = stream_data(&bearer_token).await?.next().await {
+
+    while let Some(Ok(chunk)) = stream.next().await {
         if let Ok(msg) = serde_json::to_string(&chunk) {
             publisher.send_multipart(&[ENVELOPE_KEY, &msg], 0).ok();
             i += 1;
