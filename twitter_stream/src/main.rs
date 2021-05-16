@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
             let green = Style::new().green();
             let red = Style::new().red();
 
-            let (_rate_limit, mut stream) = stream_data(&bearer_token).await?;
+            let (mut rate_limit, mut stream) = stream_data(&bearer_token).await?;
             while let Some(chunk) = stream.next().await {
                 match chunk {
                     Ok(tweet_data) => {
@@ -67,8 +67,13 @@ async fn main() -> Result<()> {
                         errors += 1;
                     }
                     Err(StreamError::Reqwest(err)) => {
-                        eprintln!("Error reading chunk of data: {:#?}\n\n", err);
+                        eprintln!("Error reading chunk of data: {:#?}", err);
                         errors += 1;
+                        println!("Waiting for rate limit ({:?})...\n\n", rate_limit.reset);
+                        rate_limit.wait().await;
+                        let (rl, s) = stream_data(&bearer_token).await?;
+                        rate_limit = rl;
+                        stream = s;
                     }
                 }
             }

@@ -1,9 +1,8 @@
-use std::time::Duration;
-
 use anyhow::Result;
 use futures::{stream::IntoStream, Stream, StreamExt, TryStreamExt};
 use reqwest::header::{self, HeaderMap};
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
 pub const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
@@ -66,10 +65,7 @@ impl RateLimitHeaders {
             None => None,
         };
         let reset = match header_map.get("x-rate-limit-reset") {
-            Some(o) => {
-                let reset = o.to_str()?.parse()?;
-                Some(Duration::from_secs(reset))
-            }
+            Some(o) => Some(Duration::from_secs(o.to_str()?.parse()?)),
             None => None,
         };
         let remaining = match header_map.get("x-rate-limit-remaining") {
@@ -81,6 +77,16 @@ impl RateLimitHeaders {
             reset,
             remaining,
         })
+    }
+
+    /// If necessary waits for a rate limit refresh
+    pub async fn wait(&self) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH);
+        if let (Some(0), Some(reset), Ok(now)) = (self.remaining, self.reset, now) {
+            if let Some(rest) = reset.checked_sub(now) {
+                tokio::time::sleep(rest).await;
+            }
+        }
     }
 }
 
