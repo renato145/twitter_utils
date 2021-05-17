@@ -20,6 +20,9 @@ pub struct Opts {
     /// Enviroment file to look for $BEARER_TOKEN.
     #[clap(long, default_value = ".env")]
     pub env_file: String,
+    /// Maximum number of connection resets while streaming
+    #[clap(short, long)]
+    pub max_resets: Option<usize>,
     #[clap(short, long, parse(from_occurrences))]
     pub verbose: i32,
     #[clap(subcommand)]

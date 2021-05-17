@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
             let term = Term::stdout();
             let bold = Style::new().bold();
             println!("{}", bold.apply_to("Starting the stream..."));
+            let mut connection_resets = 0;
             let mut processed = 0usize;
             let mut errors = 0usize;
             let mut finish = false;
@@ -77,6 +78,16 @@ async fn main() -> Result<()> {
                         }
                         errors += 1;
 
+                        if let Some(max_resets) = opts.max_resets {
+                            if connection_resets >= max_resets {
+                                println!(
+                                    "Maximum number of connection resets ({}) reached...",
+                                    max_resets
+                                );
+                                break;
+                            }
+                        }
+
                         if let Some(rest) = rate_limit.duration_until_reset() {
                             println!("Waiting for rate limit ({:?})...", rest);
                             tokio::time::sleep(rest).await;
@@ -84,6 +95,8 @@ async fn main() -> Result<()> {
                         }
 
                         let (rl, s) = stream_data(&bearer_token).await?;
+
+                        connection_resets += 1;
                         rate_limit = rl;
                         stream = s;
                     }
