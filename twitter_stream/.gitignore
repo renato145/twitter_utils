@@ -3,6 +3,7 @@
 twitter_data.jsonl
 explore_tweets
 twitter_stream
+elasticsearch_data
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust
 # Edit at https://www.toptal.com/developers/gitignore?templates=rust
