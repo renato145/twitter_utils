@@ -28,7 +28,6 @@ pub async fn stream_data(
 
     let stream = res
         .bytes_stream()
-        .into_stream()
         .map(|chunk| match chunk {
             Ok(chunk) => {
                 if chunk.len() < 10 {
