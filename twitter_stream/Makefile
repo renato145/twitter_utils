@@ -17,3 +17,7 @@ clean:
 move:
 	mv ${target_dir}/${fname} .
 	for fn in ${examples}; do mv ${target_dir}/examples/$$fn .; done
+
+clippy:
+	cargo clippy
+	cargo clippy --examples
