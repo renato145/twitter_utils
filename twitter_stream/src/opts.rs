@@ -20,6 +20,8 @@ pub struct Opts {
     /// Enviroment file to look for $BEARER_TOKEN.
     #[clap(long, default_value = ".env")]
     pub env_file: String,
+    #[clap(short, long, parse(from_occurrences))]
+    pub verbose: i32,
     #[clap(subcommand)]
     pub subcmd: Option<SubCmd>,
 }

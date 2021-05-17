@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
 
             let term = Term::stdout();
             let bold = Style::new().bold();
-            println!("{}\n\n", bold.apply_to("Starting the stream..."));
+            println!("{}", bold.apply_to("Starting the stream..."));
             let mut processed = 0usize;
             let mut errors = 0usize;
             let mut finish = false;
@@ -37,6 +37,11 @@ async fn main() -> Result<()> {
             let red = Style::new().red();
 
             let (mut rate_limit, mut stream) = stream_data(&bearer_token).await?;
+            if opts.verbose > 0 {
+                println!("{:?}", rate_limit);
+            }
+            println!("\n");
+
             while let Some(chunk) = stream.next().await {
                 match chunk {
                     Ok(tweet_data) => {
@@ -67,15 +72,17 @@ async fn main() -> Result<()> {
                         errors += 1;
                     }
                     Err(StreamError::Reqwest(err)) => {
-                        eprintln!("Error reading chunk of data: {:#?}", err);
+                        if opts.verbose > 0 {
+                            eprintln!("Error reading chunk of data: {:#?}", err);
+                        }
                         errors += 1;
 
                         if let Some(rest) = rate_limit.duration_until_reset() {
-                            println!("Waiting for rate limit ({:?})...\n\n", rest);
+                            println!("Waiting for rate limit ({:?})...", rest);
                             tokio::time::sleep(rest).await;
+                            println!("Resetting connection...\n\n");
                         }
 
-                        println!("Resetting connection...");
                         let (rl, s) = stream_data(&bearer_token).await?;
                         rate_limit = rl;
                         stream = s;
