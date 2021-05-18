@@ -5,6 +5,7 @@ explore_tweets
 twitter_stream
 zmq_pub
 zmq_es_sub
+jsonl2es
 elasticsearch_data
 
 # Created by https://www.toptal.com/developers/gitignore/api/rust

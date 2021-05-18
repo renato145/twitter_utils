@@ -1,5 +1,5 @@
 fname = twitter_stream
-examples = zmq_pub zmq_es_sub
+examples = zmq_pub zmq_es_sub jsonl2es
 target_dir = target/release
 
 .PHONY: all build move
