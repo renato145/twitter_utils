@@ -1,5 +1,5 @@
 fname = twitter_stream
-examples = zmq_pub
+examples = zmq_pub zmq_es_sub
 target_dir = target/release
 
 .PHONY: all build move
