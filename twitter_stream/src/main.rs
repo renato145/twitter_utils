@@ -9,8 +9,6 @@ use twitter_stream::{
     StreamError, SubCmd,
 };
 
-pub async fn append2file() {}
-
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
