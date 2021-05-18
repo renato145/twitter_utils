@@ -64,7 +64,9 @@ async fn main() -> Result<()> {
         match chunk {
             Ok(tweet_data) => {
                 if let Ok(msg) = serde_json::to_string(&tweet_data) {
-                    publisher.send_multipart(&[&opts.envelope_key, &msg], 0).ok();
+                    publisher
+                        .send_multipart(&[&opts.envelope_key, &msg], 0)
+                        .ok();
                     processed += 1;
 
                     let mut progress = format!("{}", processed);
