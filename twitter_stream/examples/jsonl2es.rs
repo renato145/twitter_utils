@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{AppSettings, Clap};
 use console::{Style, Term};
 use elasticsearch::{http::transport::Transport, BulkOperation, BulkParts, Elasticsearch};
+use jsonl::ReadError;
 use serde_json::Value;
 use std::{fs::File, io::BufReader};
 use twitter_stream::StreamResponse;
@@ -72,29 +73,53 @@ impl Summary {
     }
 }
 
-fn read_batch(reader: &mut BufReader<File>, batch_size: usize) -> Vec<StreamResponse> {
-    let mut data = Vec::with_capacity(batch_size);
+struct BatchReader {
+    reader: BufReader<File>,
+    batch_size: usize,
+    status: BatchReaderStatus,
+    data: Vec<StreamResponse>,
+}
 
-    loop {
-        match jsonl::read::<&mut BufReader<File>, StreamResponse>(reader) {
-            Ok(tweet) => {
-                data.push(tweet);
-                if data.len() == batch_size {
-                    break;
-                }
-            }
-            Err(jsonl::ReadError::Eof) => {
-                break;
-            }
-            _ => {}
+impl BatchReader {
+    fn new(reader: BufReader<File>, batch_size: usize) -> Self {
+        Self {
+            reader,
+            batch_size,
+            status: BatchReaderStatus::Reading,
+            data: Vec::with_capacity(batch_size),
         }
     }
-    data
+
+    fn read_batch(&mut self) -> &Vec<StreamResponse> {
+        self.data.clear();
+
+        loop {
+            match jsonl::read::<&mut BufReader<File>, StreamResponse>(&mut self.reader) {
+                Ok(tweet) => {
+                    self.data.push(tweet);
+                    if self.data.len() == self.batch_size {
+                        break;
+                    }
+                }
+                Err(ReadError::Eof) => {
+                    self.status = BatchReaderStatus::Finished;
+                    break;
+                }
+                _ => {}
+            }
+        }
+        &self.data
+    }
+}
+
+enum BatchReaderStatus {
+    Reading,
+    Finished,
 }
 
 /// https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html
 async fn send_message_batch(
-    batch: Vec<StreamResponse>,
+    batch: &[StreamResponse],
     client: &Elasticsearch,
     index: &str,
 ) -> Result<Value> {
@@ -119,7 +144,8 @@ async fn main() -> Result<()> {
     let term = Term::stdout();
 
     let file = File::open(opts.jsonl_file)?;
-    let mut reader = BufReader::new(file);
+    let reader = BufReader::new(file);
+    let mut batch_reader = BatchReader::new(reader, opts.batch_size);
 
     println!("{}", bold.apply_to("Connecting to Elastic Search..."));
     let transport =
@@ -131,7 +157,7 @@ async fn main() -> Result<()> {
     summary.show();
 
     loop {
-        let batch = read_batch(&mut reader, opts.batch_size);
+        let batch = batch_reader.read_batch();
         let n = batch.len();
         match send_message_batch(batch, &client, &opts.elastic_index).await {
             Ok(json) => summary.update_from_json(json),
@@ -139,5 +165,11 @@ async fn main() -> Result<()> {
         }
         term.clear_last_lines(3)?;
         summary.show();
+        if let BatchReaderStatus::Finished = batch_reader.status {
+            break;
+        }
     }
+
+    println!("{}", bold.apply_to("Done :)!"));
+    Ok(())
 }
