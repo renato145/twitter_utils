@@ -5,8 +5,8 @@ use elasticsearch::{http::transport::Transport, Elasticsearch, IndexParts};
 use serde_json::Value;
 use twitter_stream::StreamResponse;
 
-/// ZeroMQ Elastic Search Subscriber
-/// Gets messages from the publisher and save them to Elastic Search
+/// ZeroMQ to Elastic Search worker
+/// Gets messages from a sender socket and save them to Elastic Search
 #[derive(Clap, Debug)]
 #[clap(setting = AppSettings::ColoredHelp)]
 struct Opts {
@@ -19,19 +19,27 @@ struct Opts {
     /// Index to use for elastic search
     #[clap(long, default_value = "tweets")]
     elastic_index: String,
-    /// IP to bind the ZeroMQ socket
+    /// IP to connect the ZeroMQ socket
     #[clap(long, default_value = "127.0.0.1")]
-    bind_ip: String,
-    /// Port to bind the ZeroMQ socket
+    connect_ip: String,
+    /// Port to connect the ZeroMQ socket
     #[clap(long, default_value = "5556")]
-    bind_port: i32,
+    connect_port: i32,
+    /// If true ZeroMQ socket mode will be SUB otherwise PULL is used,
+    /// this depends on the sender, use PULL if senders use PUSH and
+    /// SUB if senders uses PUB
+    #[clap(long)]
+    socket_sub: bool,
     /// Envelope key used by the ZeroMQ publisher
+    /// (used only for socket_sub=true)
     #[clap(short, long, default_value = "twitter_data")]
     envelope_key: String,
 }
 
-fn get_message(subscriber: &zmq::Socket) -> Result<StreamResponse> {
-    let _envelop = subscriber.recv_msg(0)?;
+fn get_message(subscriber: &zmq::Socket, socket_sub: bool) -> Result<StreamResponse> {
+    if socket_sub {
+        let _envelop = subscriber.recv_msg(0)?;
+    }
     let msg = subscriber.recv_bytes(0)?;
     serde_json::from_slice::<StreamResponse>(&msg).map_err(|err| err.into())
 }
@@ -116,9 +124,12 @@ async fn main() -> Result<()> {
 
     println!("{}", bold.apply_to("Connecting to ZeroMQ..."));
     let ctx = zmq::Context::new();
-    let subscriber = ctx.socket(zmq::SUB)?;
+    let socket_type = if opts.socket_sub { zmq::SUB } else { zmq::PULL };
+    let subscriber = ctx.socket(socket_type)?;
     subscriber.connect("tcp://127.0.0.1:5556")?;
-    subscriber.set_subscribe(opts.envelope_key.as_bytes())?;
+    if opts.socket_sub {
+        subscriber.set_subscribe(opts.envelope_key.as_bytes())?;
+    }
 
     term.clear_last_lines(2)?;
     let mut summary = Summary::new();
@@ -126,7 +137,7 @@ async fn main() -> Result<()> {
     summary.show();
 
     loop {
-        let msg = get_message(&subscriber)?;
+        let msg = get_message(&subscriber, opts.socket_sub)?;
         match send_message(msg, &client, &opts.elastic_index).await {
             Ok(res) => summary.update(res),
             Err(_err) => summary.failed += 1,

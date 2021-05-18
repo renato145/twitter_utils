@@ -3,8 +3,8 @@
 twitter_data.jsonl
 explore_tweets
 twitter_stream
-zmq_pub
-zmq_es_sub
+zmq_publisher
+zmq_elasticsearch
 jsonl2es
 elasticsearch_data
 

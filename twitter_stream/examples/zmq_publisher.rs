@@ -29,7 +29,12 @@ struct Opts {
     /// Port to bind the ZeroMQ socket
     #[clap(long, default_value = "5556")]
     bind_port: i32,
+    /// If true ZeroMQ socket mode will be PUB otherwise PUSH is used
+    /// (PUB does Fan out messages and PUSH Round-robin distribution of messages)
+    #[clap(long)]
+    socket_pub: bool,
     /// Envelope key used by the ZeroMQ publisher
+    /// (used only for socket_pub=true)
     #[clap(short, long, default_value = "twitter_data")]
     envelope_key: String,
 }
@@ -41,8 +46,10 @@ async fn main() -> Result<()> {
         get_bearer_token(opts.bearer_token.as_deref(), Some(opts.env_file.as_str()))?;
 
     let ctx = zmq::Context::new();
-    let publisher = ctx.socket(zmq::PUB)?;
+    let socket_type = if opts.socket_pub { zmq::PUB } else { zmq::PUSH };
+    let publisher = ctx.socket(socket_type)?;
     publisher.bind(&format!("tcp://{}:{}", opts.bind_ip, opts.bind_port))?;
+    // publisher.connect(&format!("tcp://{}:{}", opts.bind_ip, opts.bind_port))?;
 
     let term = Term::stdout();
     let bold = Style::new().bold();
@@ -64,9 +71,14 @@ async fn main() -> Result<()> {
         match chunk {
             Ok(tweet_data) => {
                 if let Ok(msg) = serde_json::to_string(&tweet_data) {
-                    publisher
-                        .send_multipart(&[&opts.envelope_key, &msg], 0)
-                        .ok();
+                    if opts.socket_pub {
+                        publisher
+                            .send_multipart(&[&opts.envelope_key, &msg], 0)
+                            .ok();
+                    } else {
+                        // push socket doesn't allow envelope filter
+                        publisher.send(&msg, 0).ok();
+                    }
                     processed += 1;
 
                     let mut progress = format!("{}", processed);
