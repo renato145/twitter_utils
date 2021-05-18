@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{AppSettings, Clap};
 use console::{Style, Term};
-use elasticsearch::{http::transport::Transport, Elasticsearch, IndexParts};
+use elasticsearch::{http::transport::Transport, BulkOperation, BulkParts, Elasticsearch};
 use serde_json::Value;
 use std::{fs::File, io::BufReader};
 use twitter_stream::StreamResponse;
@@ -12,6 +12,9 @@ use twitter_stream::StreamResponse;
 struct Opts {
     /// JSON Lines file
     jsonl_file: String,
+    /// Batch size to send bulk messages to Elastic Search
+    #[clap(short, long, default_value = "1000")]
+    batch_size: usize,
     /// IP for the elastic search instance
     #[clap(long, default_value = "127.0.0.1")]
     elastic_ip: String,
@@ -21,37 +24,6 @@ struct Opts {
     /// Index to use for elastic search
     #[clap(long, default_value = "tweets")]
     elastic_index: String,
-}
-
-/// https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html
-#[derive(Debug)]
-enum ESResponse {
-    Created,
-    Updated,
-    Failed,
-}
-
-async fn send_message(
-    msg: StreamResponse,
-    client: &Elasticsearch,
-    index: &str,
-) -> Result<ESResponse> {
-    let response = client
-        .index(IndexParts::IndexId(index, &msg.data.id))
-        .body(&msg)
-        .send()
-        .await?;
-    if response.status_code().is_success() {
-        let response: Value = response.json().await?;
-        let result = match response["result"].as_str() {
-            Some("created") => ESResponse::Created,
-            Some("updated") => ESResponse::Updated,
-            _ => ESResponse::Failed,
-        };
-        Ok(result)
-    } else {
-        Ok(ESResponse::Failed)
-    }
 }
 
 struct Summary {
@@ -81,13 +53,63 @@ impl Summary {
         println!("Failed : {}", self.failed_style.apply_to(self.failed));
     }
 
-    fn update(&mut self, response: ESResponse) {
-        match response {
-            ESResponse::Created => self.created += 1,
-            ESResponse::Updated => self.updated += 1,
-            ESResponse::Failed => self.failed += 1,
+    fn update_from_json(&mut self, json: Value) {
+        if let Some(items) = json["items"].as_array() {
+            let failed = items.iter().filter(|o| !o["error"].is_null()).count();
+            let results = items
+                .iter()
+                .filter_map(|o| match &o["index"] {
+                    Value::Object(index) => index.get("result").map(|o| o.as_str()).flatten(),
+                    _ => None,
+                })
+                .collect::<Vec<_>>();
+            let created = results.iter().filter(|&&o| o == "created").count();
+            let updated = results.iter().filter(|&&o| o == "updated").count();
+            self.created += created;
+            self.updated += updated;
+            self.failed += failed;
         }
     }
+}
+
+fn read_batch(reader: &mut BufReader<File>, batch_size: usize) -> Vec<StreamResponse> {
+    let mut data = Vec::with_capacity(batch_size);
+
+    loop {
+        match jsonl::read::<&mut BufReader<File>, StreamResponse>(reader) {
+            Ok(tweet) => {
+                data.push(tweet);
+                if data.len() == batch_size {
+                    break;
+                }
+            }
+            Err(jsonl::ReadError::Eof) => {
+                break;
+            }
+            _ => {}
+        }
+    }
+    data
+}
+
+/// https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-bulk.html
+async fn send_message_batch(
+    batch: Vec<StreamResponse>,
+    client: &Elasticsearch,
+    index: &str,
+) -> Result<Value> {
+    let body = batch
+        .iter()
+        .map(|o| BulkOperation::index(o).id(&o.data.id).into())
+        .collect::<Vec<BulkOperation<_>>>();
+    let response = client
+        .bulk(BulkParts::Index(index))
+        .body(body)
+        .send()
+        .await?;
+
+    let json = response.json().await?;
+    Ok(json)
 }
 
 #[tokio::main]
@@ -109,19 +131,13 @@ async fn main() -> Result<()> {
     summary.show();
 
     loop {
-        match jsonl::read::<&mut BufReader<File>, StreamResponse>(&mut reader) {
-            Ok(tweet) => match send_message(tweet, &client, &opts.elastic_index).await {
-                Ok(res) => summary.update(res),
-                Err(_err) => summary.failed += 1,
-            },
-            Err(jsonl::ReadError::Eof) => {
-                break;
-            }
-            _ => summary.failed += 1,
+        let batch = read_batch(&mut reader, opts.batch_size);
+        let n = batch.len();
+        match send_message_batch(batch, &client, &opts.elastic_index).await {
+            Ok(json) => summary.update_from_json(json),
+            Err(_err) => summary.failed += n,
         }
         term.clear_last_lines(3)?;
         summary.show();
     }
-
-    Ok(())
 }
