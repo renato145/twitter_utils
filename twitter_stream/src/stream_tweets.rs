@@ -106,13 +106,13 @@ pub struct ParseError {
     pub source: serde_json::Error,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StreamResponse {
     pub data: StreamResponseData,
     pub matching_rules: Option<Vec<RuleMatch>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StreamResponseData {
     pub id: String,
     pub text: String,
@@ -124,20 +124,20 @@ pub struct StreamResponseData {
     pub entities: Option<Entities>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RuleMatch {
     pub id: usize,
     pub tag: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ReferencedTweets {
     pub id: String,
     #[serde(rename = "type")]
     pub reference_type: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PublicMetrics {
     pub retweet_count: usize,
     pub reply_count: usize,
@@ -145,7 +145,7 @@ pub struct PublicMetrics {
     pub quote_count: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Entities {
     pub annotations: Option<Vec<EntityAnnotation>>,
     pub urls: Option<Vec<EntityUrl>>,
@@ -154,7 +154,7 @@ pub struct Entities {
     pub cashtags: Option<Vec<EntityTag>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntityAnnotation {
     pub start: usize,
     pub end: usize,
@@ -164,7 +164,7 @@ pub struct EntityAnnotation {
     pub normalized_text: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntityUrl {
     pub start: usize,
     pub end: usize,
@@ -178,21 +178,21 @@ pub struct EntityUrl {
     pub description: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UrlImage {
     pub url: String,
     pub width: usize,
     pub height: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntityTag {
     pub start: usize,
     pub end: usize,
     pub tag: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntityMention {
     pub start: usize,
     pub end: usize,
