@@ -39,9 +39,47 @@ struct Opts {
     envelope_key: String,
 }
 
+struct Summary {
+    processed: usize,
+    errors: usize,
+    limit: Option<usize>,
+    processed_style: Style,
+    errors_style: Style,
+}
+
+impl Summary {
+    fn new(limit: Option<usize>) -> Self {
+        Self {
+            processed: 0,
+            errors: 0,
+            limit,
+            processed_style: Style::new().bold().green(),
+            errors_style: Style::new().bold().red(),
+        }
+    }
+
+    fn show(&self) {
+        let mut processed = format!("{}", self.processed);
+        if let Some(limit) = self.limit {
+            processed.push_str(&format!("/{}", limit));
+        }
+        println!(
+            "Processed tweets  : {}",
+            self.processed_style.apply_to(processed)
+        );
+        println!(
+            "Errors encountered: {}",
+            self.errors_style.apply_to(self.errors)
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts = Opts::parse();
+    let term = Term::stdout();
+    let bold = Style::new().bold();
+
     let bearer_token =
         get_bearer_token(opts.bearer_token.as_deref(), Some(opts.env_file.as_str()))?;
 
@@ -49,23 +87,17 @@ async fn main() -> Result<()> {
     let socket_type = if opts.socket_pub { zmq::PUB } else { zmq::PUSH };
     let publisher = ctx.socket(socket_type)?;
     publisher.bind(&format!("tcp://{}:{}", opts.bind_ip, opts.bind_port))?;
-    // publisher.connect(&format!("tcp://{}:{}", opts.bind_ip, opts.bind_port))?;
 
-    let term = Term::stdout();
-    let bold = Style::new().bold();
-    println!("{}", bold.apply_to("Starting the stream..."));
     let mut connection_resets = 0;
-    let mut processed = 0usize;
-    let mut errors = 0usize;
     let mut finish = false;
-    let green = Style::new().green();
-    let red = Style::new().red();
 
     let (mut rate_limit, mut stream) = stream_data(&bearer_token).await?;
     if opts.verbose > 0 {
         println!("{:?}", rate_limit);
     }
-    println!("\n");
+    let mut summary = Summary::new(opts.limit);
+    println!("{}", bold.apply_to("Starting the stream..."));
+    summary.show();
 
     while let Some(chunk) = stream.next().await {
         match chunk {
@@ -79,19 +111,17 @@ async fn main() -> Result<()> {
                         // push socket doesn't allow envelope filter
                         publisher.send(&msg, 0).ok();
                     }
-                    processed += 1;
 
-                    let mut progress = format!("{}", processed);
+                    summary.processed += 1;
                     if let Some(limit) = opts.limit {
-                        progress.push_str(&format!("/{}", limit));
-                        if processed == limit {
+                        if summary.processed == limit {
                             finish = true;
                         }
                     }
 
                     term.clear_last_lines(2)?;
-                    println!("{} {}", green.apply_to("Processed tweets  :"), progress);
-                    println!("{} {}", red.apply_to("Errors encountered:"), errors);
+                    summary.show();
+
                     if finish {
                         break;
                     }
@@ -103,13 +133,14 @@ async fn main() -> Result<()> {
                     "Couldn't parse tweet data:\n{}\n{:?}\n\n",
                     err.source, err.msg
                 );
-                errors += 1;
+                summary.errors += 1;
             }
             Err(StreamError::Reqwest(err)) => {
+                // Try to reconnect
                 if opts.verbose > 0 {
                     eprintln!("Error reading chunk of data: {:#?}", err);
                 }
-                errors += 1;
+                summary.errors += 1;
 
                 if let Some(max_resets) = opts.max_resets {
                     if connection_resets >= max_resets {
