@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
     let ctx = zmq::Context::new();
     let socket_type = if opts.socket_sub { zmq::SUB } else { zmq::PULL };
     let subscriber = ctx.socket(socket_type)?;
-    subscriber.connect("tcp://127.0.0.1:5556")?;
+    subscriber.connect(&format!("tcp://{}:{}", opts.connect_ip, opts.connect_port))?;
     if opts.socket_sub {
         subscriber.set_subscribe(opts.envelope_key.as_bytes())?;
     }
