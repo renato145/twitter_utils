@@ -24,8 +24,8 @@ But, before running docker-compose create a folder called `elasticsearch_data` a
 
 By running the docker-compose file 4 services will start:
 - elasticsearch: An instance of Elastic Search
-- zmq_publisher: Obtains data from twitter stream and publishes messages via ZeroMQ (source code in `twitter_stream/examples/zmq_publisher.rs`).
-- zmq_elasticsearch: Receives messages from the zmq_publisher and sends them to the elasticsearch instance (source code in `twitter_stream/examples/zmq_elasticsearch.rs`).
+- zmq_publisher: Obtains data from twitter stream and publishes messages via ZeroMQ (source code in [twitter_stream/examples/zmq_publisher.rs](twitter_stream/examples/zmq_publisher.rs)).
+- zmq_elasticsearch: Receives messages from the zmq_publisher and sends them to the elasticsearch instance (source code in [twitter_stream/examples/zmq_elasticsearch.rs](twitter_stream/examples/zmq_elasticsearch.rs)).
 - kibana: An instance of Kibana for easy data exploration.
 
 (If you don't want to use docker, you will need rust and cargo installed to compile the binaries in `twitter_stream` folder by running `make all`)
