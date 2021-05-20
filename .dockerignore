@@ -1,0 +1,12 @@
+.vscode
+elasticsearch_data
+twitter_stream/.env
+twitter_stream/twitter_data.jsonl
+twitter_stream/explore_tweets
+twitter_stream/twitter_stream
+twitter_stream/zmq_publisher
+twitter_stream/zmq_elasticsearch
+twitter_stream/jsonl2es
+twitter_stream/elasticsearch_data
+twitter_stream/target
+twitter_stream/Cargo.lock
