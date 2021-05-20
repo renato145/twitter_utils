@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 
+use crate::tweetid2url;
+
 pub const STREAM_URL: &str = "https://api.twitter.com/2/tweets/search/stream";
 
 pub async fn stream_data(
@@ -33,12 +35,14 @@ pub async fn stream_data(
                 if chunk.len() < 10 {
                     Err(StreamError::SmallChunk)
                 } else {
-                    serde_json::from_slice::<StreamResponse>(&chunk).map_err(|err| {
-                        StreamError::Parse(ParseError {
-                            msg: format!("{:?}", chunk),
-                            source: err,
+                    serde_json::from_slice::<StreamResponse>(&chunk)
+                        // .map(|tweet| tweet.add_url())
+                        .map_err(|err| {
+                            StreamError::Parse(ParseError {
+                                msg: format!("{:?}", chunk),
+                                source: err,
+                            })
                         })
-                    })
                 }
             }
             Err(err) => Err(err.into()),
@@ -112,9 +116,49 @@ pub struct StreamResponse {
     pub matching_rules: Option<Vec<RuleMatch>>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct StreamResponseData {
     pub id: String,
+    pub url: String,
+    pub text: String,
+    pub created_at: String,
+    pub conversation_id: String,
+    #[serde(default)]
+    pub referenced_tweets: Option<Vec<ReferencedTweets>>,
+    pub public_metrics: PublicMetrics,
+    pub entities: Option<Entities>,
+}
+
+impl From<StreamResponseDataRaw> for StreamResponseData {
+    fn from(raw: StreamResponseDataRaw) -> Self {
+        let url = tweetid2url(&raw.id);
+        Self {
+            id: raw.id,
+            url,
+            text: raw.text,
+            created_at: raw.created_at,
+            conversation_id: raw.conversation_id,
+            referenced_tweets: raw.referenced_tweets,
+            public_metrics: raw.public_metrics,
+            entities: raw.entities,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for StreamResponseData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let response: StreamResponseDataRaw = Deserialize::deserialize(deserializer)?;
+        Ok(response.into())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StreamResponseDataRaw {
+    pub id: String,
+    pub url: Option<String>,
     pub text: String,
     pub created_at: String,
     pub conversation_id: String,

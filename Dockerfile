@@ -9,6 +9,8 @@ RUN make all
 RUN rm -rf target
 RUN mv twitter_stream /usr/local/bin \
     && mv zmq_elasticsearch /usr/local/bin \
-    && mv zmq_publisher /usr/local/bin
+    && mv zmq_publisher /usr/local/bin \
+    && mv jsonl2es /usr/local/bin \
+    && mv es2jsonl /usr/local/bin
 
 ENTRYPOINT [ "twitter_stream" ]

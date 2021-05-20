@@ -1,6 +1,6 @@
 # Twitter utils
 
-Requirements:
+## Requirements
 1. Have a Twitter developer account to access the v2 of their API, check: https://developer.twitter.com/en/docs/tutorials/stream-tweets-in-real-time.
 2. Get the bearer_token from twitter developer portal and put it on an `.env` file on the repo root, eg:
 ```
@@ -16,6 +16,8 @@ BEARER_TOKEN=XXXXXXXXXXX
    - For more info on how to create rules check: https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/integrate/build-a-rule.
 
 
+## Streaming
+
 Once all desired rules are setup is time to stream. The easiest way to have everything installed and running is with docker-compose installed.
 
 But, before running docker-compose create a folder called `elasticsearch_data` as otherwise things will fail.
@@ -25,6 +27,10 @@ By running the docker-compose file 4 services will start:
 - zmq_publisher: Obtains data from twitter stream and publishes messages via ZeroMQ (source code in `twitter_stream/examples/zmq_publisher.rs`).
 - zmq_elasticsearch: Receives messages from the zmq_publisher and sends them to the elasticsearch instance (source code in `twitter_stream/examples/zmq_elasticsearch.rs`).
 - kibana: An instance of Kibana for easy data exploration.
+
+(If you don't want to use docker, you will need rust and cargo installed to compile the binaries in `twitter_stream` folder by running `make all`)
+
+## Exploring
 
 To see the state of the stream run: `docker logs twitter_utils_zmq_elasticsearch_1 -f`
 To access Kibana go to http://localhost:5601 (the first time may take a couple of minutes to start), then you need to need to add the Elastic Search index in Kibana:
@@ -47,4 +53,18 @@ To access Kibana go to http://localhost:5601 (the first time may take a couple o
 
 After this you should be able to use Kibana tools to explore the data (check "Visualize Library" on the side bar).
 
-> If you don't want to use docker, you will need rust and cargo installed to compile the binaries in `twitter_stream` folder by running `make all`.
+## Get data as JSON file
+
+To dump Elastic Search index data to a file you can use [elasticsearch-dump](https://github.com/elasticsearch-dump/elasticsearch-dump) (install with `npm install elasticdump -g`):
+```bash
+elasticdump --input=http://localhost:9200/tweets --output=data.jsonl --type=data --limit=5000
+``` 
+> Note that this tool will give you a line-delimited JSON file
+
+One problem with this file is that it includes Elastic Search metadata.
+To extract only the tweet data (the "_source" field), we can use [jq](https://stedolan.github.io/jq/) (in ubuntu you can install with `sudo apt-get install jq`):
+```bash
+jq -c '._source' data.jsonl > final_data.jsonl
+# or if you want a regular json file:
+jq -s '[.[]._source]' data.jsonl > final_data.json
+```
