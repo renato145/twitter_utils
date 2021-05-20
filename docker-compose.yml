@@ -13,7 +13,7 @@ services:
 
   zmq_elasticsearch:
     build: .
-    command: zmq_elasticsearch --socket-sub --connect-ip zmq_publisher --elastic-ip elasticsearch
+    entrypoint: zmq_elasticsearch --socket-sub --connect-ip zmq_publisher --elastic-ip elasticsearch
     depends_on:
       - elasticsearch
 
@@ -23,7 +23,7 @@ services:
       - BEARER_TOKEN
     ports:
       - "5556:5556"
-    command: zmq_publisher --socket-pub --bind-ip 0.0.0.0
+    entrypoint: zmq_publisher --socket-pub --bind-ip 0.0.0.0
     depends_on:
       - zmq_elasticsearch
 

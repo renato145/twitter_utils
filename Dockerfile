@@ -11,4 +11,4 @@ RUN mv twitter_stream /usr/local/bin \
     && mv zmq_elasticsearch /usr/local/bin \
     && mv zmq_publisher /usr/local/bin
 
-CMD [ "twitter_stream" ]
+ENTRYPOINT [ "twitter_stream" ]
