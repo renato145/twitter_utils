@@ -13,12 +13,14 @@ services:
 
   zmq_elasticsearch:
     build: .
+    restart: unless-stopped
     entrypoint: zmq_elasticsearch --socket-sub --connect-ip zmq_publisher --elastic-ip elasticsearch
     depends_on:
       - elasticsearch
 
   zmq_publisher:
     build: .
+    restart: unless-stopped
     environment:
       - BEARER_TOKEN
     ports:
