@@ -1,4 +1,5 @@
 .vscode
+data
 elasticsearch_data
 twitter_stream/.env
 twitter_stream/*.jsonl
