@@ -186,6 +186,7 @@ pub struct UserData {
     id: String,
     name: String,
     username: String,
+    created_at: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
