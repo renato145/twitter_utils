@@ -1,7 +1,7 @@
 .vscode
 elasticsearch_data
 twitter_stream/.env
-twitter_stream/twitter_data.jsonl
+twitter_stream/*.jsonl
 twitter_stream/explore_tweets
 twitter_stream/twitter_stream
 twitter_stream/zmq_publisher

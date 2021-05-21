@@ -19,6 +19,7 @@ pub async fn stream_data(
     let res = client
         .get(STREAM_URL)
         .header(header::AUTHORIZATION, bearer_token)
+        // https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/quick-start
         .query(&[(
             "tweet.fields",
             "created_at,conversation_id,referenced_tweets,public_metrics,entities",
@@ -35,6 +36,7 @@ pub async fn stream_data(
                 if chunk.len() < 10 {
                     Err(StreamError::SmallChunk)
                 } else {
+                    println!("{:?}", chunk);
                     serde_json::from_slice::<StreamResponse>(&chunk)
                         // .map(|tweet| tweet.add_url())
                         .map_err(|err| {

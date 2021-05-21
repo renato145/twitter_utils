@@ -1,6 +1,6 @@
 .vscode
 .env
-twitter_data.jsonl
+*.jsonl
 explore_tweets
 twitter_stream
 zmq_publisher
