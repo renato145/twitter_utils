@@ -56,8 +56,8 @@ async fn main() -> Result<()> {
                         }
 
                         term.clear_last_lines(2)?;
-                        println!("{} {}", green.apply_to("Processed tweets  :"), progress);
-                        println!("{} {}", red.apply_to("Errors encountered:"), errors);
+                        println!("Processed tweets  : {}", green.apply_to(progress));
+                        println!("Errors encountered: {}", red.apply_to(errors));
                         if finish {
                             break;
                         }

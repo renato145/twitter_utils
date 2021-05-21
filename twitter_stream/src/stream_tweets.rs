@@ -20,10 +20,14 @@ pub async fn stream_data(
         .get(STREAM_URL)
         .header(header::AUTHORIZATION, bearer_token)
         // https://developer.twitter.com/en/docs/twitter-api/tweets/filtered-stream/quick-start
-        .query(&[(
-            "tweet.fields",
-            "created_at,conversation_id,referenced_tweets,public_metrics,entities",
-        )])
+        .query(&[
+            (
+                "tweet.fields",
+                "created_at,conversation_id,referenced_tweets,public_metrics,entities",
+            ),
+            ("expansions", "author_id"),
+            ("user.fields", "created_at"),
+        ])
         .send()
         .await?;
 
@@ -36,15 +40,13 @@ pub async fn stream_data(
                 if chunk.len() < 10 {
                     Err(StreamError::SmallChunk)
                 } else {
-                    println!("{:?}", chunk);
-                    serde_json::from_slice::<StreamResponse>(&chunk)
-                        // .map(|tweet| tweet.add_url())
-                        .map_err(|err| {
-                            StreamError::Parse(ParseError {
-                                msg: format!("{:?}", chunk),
-                                source: err,
-                            })
+                    // println!("{:?}\n\n", chunk);
+                    serde_json::from_slice::<StreamResponse>(&chunk).map_err(|err| {
+                        StreamError::Parse(ParseError {
+                            msg: format!("{:?}\n\n", chunk),
+                            source: err,
                         })
+                    })
                 }
             }
             Err(err) => Err(err.into()),
@@ -115,12 +117,14 @@ pub struct ParseError {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StreamResponse {
     pub data: StreamResponseData,
+    pub includes: StreamResponseIncludes,
     pub matching_rules: Option<Vec<RuleMatch>>,
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct StreamResponseData {
     pub id: String,
+    pub author_id: String,
     pub url: String,
     pub text: String,
     pub created_at: String,
@@ -136,6 +140,7 @@ impl From<StreamResponseDataRaw> for StreamResponseData {
         let url = tweetid2url(&raw.id);
         Self {
             id: raw.id,
+            author_id: raw.author_id,
             url,
             text: raw.text,
             created_at: raw.created_at,
@@ -160,6 +165,7 @@ impl<'de> Deserialize<'de> for StreamResponseData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StreamResponseDataRaw {
     pub id: String,
+    pub author_id: String,
     pub url: Option<String>,
     pub text: String,
     pub created_at: String,
@@ -168,6 +174,18 @@ pub struct StreamResponseDataRaw {
     pub referenced_tweets: Option<Vec<ReferencedTweets>>,
     pub public_metrics: PublicMetrics,
     pub entities: Option<Entities>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StreamResponseIncludes {
+    pub users: Vec<UserData>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct UserData {
+    id: String,
+    name: String,
+    username: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
