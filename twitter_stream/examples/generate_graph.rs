@@ -202,17 +202,17 @@ fn main() -> Result<()> {
             }
         });
 
-    // 3. refering tweets -> tweet
+    // 3. tweet -> refering tweets
     data.iter()
         .filter_map(|tweet| {
-            if let (Some(references), Some(&target)) = (
+            if let (Some(references), Some(&source)) = (
                 &tweet.data.referenced_tweets,
                 nodes_map.get(tweet.data.id.as_str()),
             ) {
                 let edge_info = references
                     .iter()
                     .filter_map(|reference| nodes_map.get(reference.id.as_str()))
-                    .map(move |&source| (source, target));
+                    .map(move |&target| (source, target));
                 return Some(edge_info);
             }
             None
