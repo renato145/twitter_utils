@@ -141,6 +141,7 @@ async fn main() -> Result<()> {
         match send_message(msg, &client, &opts.elastic_index).await {
             Ok(res) => summary.update(res),
             Err(_err) => summary.failed += 1,
+            // TODO: handle errors
         }
         term.clear_last_lines(3)?;
         summary.show();
