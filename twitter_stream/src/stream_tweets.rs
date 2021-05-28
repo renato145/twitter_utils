@@ -183,10 +183,10 @@ pub struct StreamResponseIncludes {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserData {
-    id: String,
-    name: String,
-    username: String,
-    created_at: String,
+    pub id: String,
+    pub name: String,
+    pub username: String,
+    pub created_at: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
