@@ -4,6 +4,7 @@ elasticsearch_data
 twitter_stream/.env
 twitter_stream/*.jsonl
 twitter_stream/explore_tweets
+twitter_stream/generate_graph
 twitter_stream/twitter_stream
 twitter_stream/zmq_publisher
 twitter_stream/zmq_elasticsearch

@@ -1,5 +1,5 @@
 fname = twitter_stream
-examples = zmq_publisher zmq_elasticsearch jsonl2es
+examples = zmq_publisher zmq_elasticsearch jsonl2es generate_graph
 target_dir = target/release
 
 .PHONY: all build move

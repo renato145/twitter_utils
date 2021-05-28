@@ -2,6 +2,7 @@
 .env
 *.jsonl
 explore_tweets
+generate_graph
 twitter_stream
 zmq_publisher
 zmq_elasticsearch
